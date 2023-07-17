@@ -1,7 +1,7 @@
 EDITS made by crocs_in_socks:
 - All aditional code and changes have been done within the EDITS folder.
 - In order to run the code for the given input, run the testing.py file in the EDITS folder.
-
+- Final output is the FINAL_DUB.mp4 file in the EDITS folder.
 
 
 # **Wav2Lip**: *Accurately Lip-syncing Videos In The Wild*
