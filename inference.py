@@ -8,6 +8,8 @@ import torch, face_detection
 from models import Wav2Lip
 import platform
 
+ffmpeg_path = "C:ffmpeg\\bin\\ffmpeg.exe"
+
 parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')
 
 parser.add_argument('--checkpoint_path', type=str, 
@@ -22,8 +24,7 @@ parser.add_argument('--outfile', type=str, help='Video path to save result. See 
 
 parser.add_argument('--static', type=bool, 
 					help='If True, then use only first video frame for inference', default=False)
-parser.add_argument('--fps', type=float, help='Can be specified only if input is a static image (default: 25)', 
-					default=25., required=False)
+parser.add_argument('--fps', type=float, help='Can be specified only if input is a static image (default: 25)', default=25., required=False)
 
 parser.add_argument('--pads', nargs='+', type=int, default=[0, 10, 0, 0], 
 					help='Padding (top, bottom, left, right). Please adjust to include chin at least')
@@ -273,7 +274,7 @@ def main():
 
 	out.release()
 
-	command = 'ffmpeg -y -i {} -i {} -strict -2 -q:v 1 {}'.format(args.audio, 'temp/result.avi', args.outfile)
+	command = '{} -y -i {} -i {} -strict -2 -q:v 1 {}'.format(ffmpeg_path, args.audio, 'temp/result.avi', args.outfile)
 	subprocess.call(command, shell=platform.system() != 'Windows')
 
 if __name__ == '__main__':
