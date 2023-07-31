@@ -1,5 +1,6 @@
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
+import ffmpeg
 import soundfile as sf
 import cv2
 import subprocess
@@ -50,6 +51,7 @@ def run_inference(checkpoint_path, video_path, audio_path, output_path):
         '--face', video_path,
         '--audio', audio_path,
         '--outfile', output_path,
+        '--nosmooth'
     ]
     subprocess.run(command)
 
@@ -81,30 +83,18 @@ def get_timestamps(input_video, threshold=30):
             mean_diff = gray_diff.mean()
 
         if mean_diff > threshold and start_time is None:
-            # Image changes
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-            # print()
-            # print("start", mean_diff, i / frame_rate)
-            # print()
-            # if len(faces) != 1:
             start_time = i / frame_rate
 
         elif mean_diff > threshold and start_time is not None:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-            # print()
-            # print("end before check", mean_diff,  i / frame_rate)
-            # print()
             if len(faces) == 1:
                 end_time = i / frame_rate
                 no_face_timestamps.append(start_time)
                 no_face_timestamps.append(end_time)
                 start_time = None
-                # print()
-                # print("end after check", mean_diff, end_time)
-                # print()
-                # cv2.imwrite(f'static{i}.jpg', frame)
 
         prev_frame = frame
     
@@ -140,32 +130,48 @@ def split_into_parts(input_video, input_audio, timestamps):
     return to_sync_videos, to_sync_audios, not_to_sync_videos, not_to_sync_audios
 
 
+def convert_to_720p(input_path, output_path):
+    (
+        ffmpeg.input(input_path)
+        .filter("scale", width=1280, height=720)
+        .output(output_path, vcodec="libx264", crf=18)
+        .run(overwrite_output=True)
+    )
+
 if __name__ == '__main__':
     input_video_file = r'EDITS\input_video.mp4'
     input_audio_file = r'EDITS\input_audio.wav'
     clipped_video = r'EDITS\clipped_video.mp4'
     dubbed_video = r'EDITS\dubbed_video.mp4'
+    dubbed_video_720 = r'EDITS\dubbed_video_720.mp4'
 
     print(f'The audio clip is {get_audio_length(input_audio_file)} seconds long.')
     print(f'The video clip is {get_video_length(input_video_file)} seconds long.')
 
     match_lengths(input_video_file, clipped_video, input_audio_file, input_audio_file)
+
+    print('\nDubbing Video.\n')
     replace_audio(clipped_video, input_audio_file, dubbed_video)
 
-    checkpoint_path = r'checkpoints\wav2lip.pth'
+    print('\nConverting video to 720p.\n')
+    convert_to_720p(dubbed_video, dubbed_video_720)
+
+    checkpoint_path = r'checkpoints\wav2lip_gan.pth'
     video_path = r'EDITS\dubbed_video.mp4'
     audio_path = r'EDITS\input_audio.wav'
     output_path = r'EDITS\synced_video.mp4'
 
     # run_inference(checkpoint_path, video_path, audio_path, output_path)
 
-    timestamps = get_timestamps(dubbed_video)
-    timestamps.append(get_video_length(dubbed_video))
+    timestamps = get_timestamps(dubbed_video_720)
+    timestamps.append(get_video_length(dubbed_video_720))
 
+    print('Timestamps are :')
     for i in timestamps:
         print(i)
 
-    to_sync_videos, to_sync_audios, not_to_sync_videos, not_to_sync_audios = split_into_parts(dubbed_video, input_audio_file,timestamps)
+    print('\nSplitting into parts.\n')
+    to_sync_videos, to_sync_audios, not_to_sync_videos, not_to_sync_audios = split_into_parts(dubbed_video_720, input_audio_file,timestamps)
 
     current = 0
     for i in tqdm(range(0, len(to_sync_videos))):
@@ -174,6 +180,9 @@ if __name__ == '__main__':
         if i < len(not_to_sync_videos):
             replace_audio(not_to_sync_videos[i], not_to_sync_audios[i], f'EDITS\SYNCED\synced{current+1}.mp4')
             current += 1
+
+    # print('\nRunning Inference.\n')
+    # run_inference(checkpoint_path, to_sync_videos[0], to_sync_audios[0], r'EDITS\SYNCED\synced1.mp4')
     
     final_clips = []
     for i in tqdm(range(0, current)):
